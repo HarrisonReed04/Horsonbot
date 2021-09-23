@@ -646,5 +646,15 @@ class misc_commands(commands.Cog):
     async def girlfriend(self, ctx):
         await ctx.send(embed=discord.Embed(title="Girlfriend check", description=f"{(datetime.now()-datetime.strptime('30-07-2021', '%d-%m-%Y')).days} days without a girlfriend :cry:", color=0xff0000))
 
+    @commands.command()
+    async def boyfriend(self, ctx, user:discord.Member = None):
+        user = user or ctx.author
+        if user.id == 538838470727172117:
+            await ctx.send(embed=discord.Embed(title=f"{user.display_name} doesn't have a boyfriend because he is straight", color=0xff0000))
+        elif user.id == 287551363489988609:
+            await ctx.send(embed=discord.Embed(title=f"{user.display_name} is super mega ultra gay but still lonely", color=0xff0000))
+        else:
+            await ctx.send(embed=discord.Embed(title=f"{user.display_name} you're a fag.", color=0xff0000))
+
 def setup(bot):
     bot.add_cog(misc_commands(bot))

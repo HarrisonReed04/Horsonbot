@@ -1,7 +1,14 @@
-from database import utc_to_locat
+from json.decoder import JSONDecodeError
+from database import emojis
 from discord.ext import commands
 import discord
+from discord import Spotify
 from datetime import datetime, timedelta
+from pathlib import Path
+import pathlib
+import json
+import os
+import uuid
 class spotify(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -59,5 +66,127 @@ class spotify(commands.Cog):
                 await ctx.send(embed=embed)
                 return
         await ctx.send(embed=discord.Embed(title=f"{user.display_name} is not currently vibing on spotify!", color=0xf0ff0f))
+
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before, after):
+        prev, now = None, None
+        for activity in before.activities:
+            if isinstance(activity, Spotify):
+                prev = activity
+                break
+                
+        for activity in after.activities:
+            if isinstance(activity, Spotify):
+                now = activity
+                break
+
+        if now == None:
+            print("Return")
+            return
+
+        x = {}
+
+        for attr in list(reversed(dir(now))):
+            if str(attr) in ["album", "artists", "title", "track_id"]:
+                x[str(attr)] = getattr(now, attr)
+
+
+        track_id = x["track_id"]
+                
+        path = pathlib.Path(__file__).parent.resolve()
+        path = path.parents[0]
+        file = f"{path}/spotify/{after.guild.id}-spotify.json"
+
+
+
+        if not Path(file).is_file():
+            with open(file, 'x') as f:
+                guild_file = {}
+                print(f"Created {file}")
+
+        else:
+            with open(file, 'rt') as f:
+                try:
+                    guild_file = json.load(f)
+                except JSONDecodeError:
+                    guild_file = {}
+
+        #guild_file[track_id] = {"info":x, "users":y, "total_plays":z}
+
+        if guild_file != {}:
+
+            try:
+                guild_file[track_id]
+                plays = int(guild_file[track_id]['plays']) + 1
+                guild_file[track_id]['plays'] = plays
+                guild_has_played = True
+
+            except KeyError:
+                guild_has_played = False
+
+            if guild_has_played:
+                try:
+                    print("0")
+                    user_plays = int(guild_file[track_id]['users'][str(after.id)]['total_plays']) + 1
+                    print("1")
+                    guild_file[track_id]['users'][str(after.id)]['total_plays'] = user_plays
+                    print("2")
+                    user_has_played = True
+
+                except KeyError as e:
+                    print(e)
+                    user_has_played = False
+
+            if guild_has_played == False:
+                guild_file[track_id] = {"info":x,"users":{after.id:{"total_plays":1, "last_play":f"{datetime.now().strftime('%m')}/{datetime.now().strftime('%Y')}"}},"plays":1}
+            elif user_has_played == False:
+                guild_file[track_id] = {"info":x,"users":{after.id:{"total_plays":1, "last_play":f"{datetime.now().strftime('%m')}/{datetime.now().strftime('%Y')}"}},"plays":plays}
+
+
+        else:
+            guild_file[track_id] = {"info":x,"users":{after.id:{"total_plays":1, "last_play":f"{datetime.now().strftime('%m')}/{datetime.now().strftime('%Y')}"}},"plays":1}
+            print("Inserted new track details")
+
+            print(guild_file)
+
+        with open(file, "w") as q:
+            json.dump(guild_file,q,indent=4)
+
+    @spotify.command()
+    async def top_song(self, ctx, user:discord.Member=None):
+        user = ctx.author
+        await ctx.send(embed=discord.Embed(title="Havent coded that yet"))
+
+        path = pathlib.Path(__file__).parent.resolve()
+        path = path.parents[0]
+        file = f"{path}/spotify/{ctx.guild.id}-spotify.json"
+
+        with open(file, 'rt') as f:
+            try:
+                guild_file = json.load(f)
+            except JSONDecodeError:
+                await ctx.send(embed=discord.Embed(title="no song yet"))   
+                print("brok")  
+                return
+
+        highest = {}
+        highest_total_plays = 0
+
+        for key in guild_file:
+            if guild_file[key]['plays'] > highest_total_plays:
+                highest = guild_file[key]['info']
+                highest_total_plays = guild_file[key]['plays']
+                print(highest)
+        
+        embed=discord.Embed(title=f"Top song in {ctx.guild.name}", description=f"{highest}")
+        await ctx.send(embed=embed)
+
+            
+
+
+
+
+
 def setup(bot):
     bot.add_cog(spotify(bot))
