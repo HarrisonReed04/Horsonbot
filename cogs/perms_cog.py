@@ -32,6 +32,7 @@ class Perms_Cog(commands.Cog):
     async def cmd(self, ctx, command_name:str, permission_level:int):
         owner = self.bot.get_user(538838470727172117)
         await command_permission_set(command_name,owner,self.bot,ctx,permission_level)
+        await ctx.send(embed=discord.Embed(description=f"Command `{command_name}` permission level changed to `{permission_level}`", color=0xff0000))
         
     @perms.command()
     async def user(self, ctx, user:discord.Member, permission_level:int):

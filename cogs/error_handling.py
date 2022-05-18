@@ -53,6 +53,17 @@ class error_handler(commands.Cog):
             except discord.HTTPException:
                 pass
 
+        elif isinstance(error, commands.PrivateMessageOnly):
+            embed = discord.Embed(
+                title=f"{emojis['barrier']} That command can only be used in DMs!",
+                color = 0xff0000
+            )
+            embed.set_footer(text="Try using that command in our DM's!", icon_url=ctx.author.avatar_url)
+            try:
+                await ctx.author.send(embed=embed)
+            except discord.HTTPException:
+                pass
+
         elif isinstance(error, commands.MissingRequiredArgument):
             embed = discord.Embed(
                 title=f"{emojis['warning']} Woah, you missed an argument there buddy!",

@@ -1,12 +1,14 @@
 import asyncio
 from typing import Union
 import aiomysql
-from database import db_commit, db_select, determine_prefix, get_current_covid_date, emojis
+from database import db_commit, db_select, determine_prefix, get_current_covid_date, emojis, alphabet
 import discord
 from discord.ext import commands, tasks
 from datetime import datetime
 from colorama import Fore, init
 from requests import get
+import matplotlib.pyplot as plt
+import random
 
 init()
 
@@ -20,13 +22,65 @@ class coronavirus(commands.Cog):
         await self.covid_dates_init_check()
         
 
+    def create_graph(self, data):
+        def randstr(count):
+            retr = ""
+            for x in range(count):
+                retr += alphabet[random.randint(1,26)]
+            return retr
+        instance = randstr(random.randint(10,15))
+
+        data = data['data']
+
+        casesthisweek = []
+        caseslastweek = []
+        dates = []
+
+        for x in range(6,-1,-1):
+            casesthisweek.append(data[x]['dailyCases'])
+
+        for x in range(14,7,-1):
+            caseslastweek.append(data[x]['dailyCases'])
+
+        for x in range(0,7):
+            dates.append(datetime.strptime(data[6-x]['date'],'%Y-%m-%d').strftime("%d/%m"))
+
+        color = "red" if int(data[1]['dailyCases']) <= int(data[0]['dailyCases']) else "green" 
+        plt.figure(facecolor="#2f3136")
+        ax = plt.axes()
+        ax.plot(dates, caseslastweek, color="white", label="Last Week Cases", alpha=0.5, linewidth=0.5)
+        ax.plot(dates, casesthisweek, color=color, label="This Week Cases", linewidth=2.5)
+        ax.set_facecolor("#2f3136")
+        ax.yaxis.label.set_color('white')
+        ax.xaxis.label.set_color('white')
+        ax.spines['bottom'].set_color('white')
+        ax.spines['top'].set_color('white')
+        ax.spines['left'].set_color('white')
+        ax.spines['right'].set_color('white')
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+        plt.ylabel("Cases")
+        plt.margins(0.05)
+        plt.xticks(rotation=90)
+        plt.legend()
+        plt.savefig(f"covidgraphs/{instance}")      
+        return instance
+
+
     async def coronavirus_daily_update(self, channelid=None):
         url = 'https://api.coronavirus.data.gov.uk/v1/data?filters=areaType=overview&structure={"date":"date","dailyCases":"newCasesByPublishDate","cumulativeCases":"cumCasesByPublishDate","dailyDeaths":"newDeaths28DaysByPublishDate","cumulativeDeaths":"cumDeaths28DaysByPublishDate"}'
         data = await self.get_data(url)
+
+        identifier = self.create_graph(data)
+
+        file = discord.File(f"/mnt/networkdrive/bots/hbot/covidgraphs/{identifier}.png", filename=f"{identifier}.png")
+        
         embed = discord.Embed(
             color = 0x00ff00,
             description = f"Horson Bot's daily covid update! - {datetime.now().strftime('%d-%m-%Y')}"
         )
+
+
         if not channelid:
             date = data['data'][0]['date']
             cases = data['data'][0]['dailyCases']
@@ -77,35 +131,46 @@ class coronavirus(commands.Cog):
         url = 'https://api.coronavirus.data.gov.uk/v1/data?filters=areaType=overview&structure={"date":"date","dailyCases":"newCasesByPublishDate","cumulativeCases":"cumCasesByPublishDate","dailyDeaths":"newDeaths28DaysByPublishDate","cumulativeDeaths":"cumDeaths28DaysByPublishDate"}'
         data = await self.get_data(url)
         embed = discord.Embed(
-            color = 0x00ff00,
+            color = 0xFDE5DA,
             title = f"""Horson Bot's daily covid update\n{f'`Today, {datetime.now().strftime("%d-%m-%Y")}`' if datetime.now().strftime('%d-%m-%Y') == data['data'][0]['date'] else f"Date: `{datetime.strptime(data['data'][0]['date'],'%Y-%m-%d').strftime('%d-%m-%Y')}`" }"""
         )
 
+        embed.set_image(url=f"attachment://{identifier}.png")
+
         newcases, cumcases, newdeaths, cumdeaths = data['data'][0]['dailyCases'] , data['data'][0]['cumulativeCases'] , data['data'][0]['dailyDeaths'] , data['data'][0]['cumulativeDeaths']
-        
+
         yesterdaycases, yesterdaydeaths = data['data'][1]['dailyCases'], data['data'][1]['dailyDeaths']
         
         casesdifference, deathsdifference = yesterdaycases-newcases , yesterdaydeaths-newdeaths
         
-        newnewcasesdiff, newnewdeathsdiff = "{:,}".format(abs((data['data'])[1]['dailyCases']-(data['data'][0]['dailyCases']))),"{:,}".format(abs(data['data'][1]['dailyDeaths']-(data['data'][0]['dailyDeaths']))) 
+        yesterdaycasesdiff, yesterdaydeathsdiff = "{:,}".format(abs((data['data'])[1]['dailyCases']-(data['data'][0]['dailyCases']))),"{:,}".format(abs(data['data'][1]['dailyDeaths']-(data['data'][0]['dailyDeaths']))) 
+        
+        weekagocases, weekagodeaths = data['data'][6]['dailyCases'], data['data'][6]['dailyDeaths']
+        
+        weekcasesdifference, weekdeathsdifference = weekagocases-newcases , weekagodeaths-newdeaths
+        
+        weekcasesdiff, weekdeathsdiff = "{:,}".format(abs(int(data['data'][6]['dailyCases'])-int(data['data'][0]['dailyCases']))),"{:,}".format(abs(int(data['data'][6]['dailyDeaths'])-int(data['data'][0]['dailyDeaths']))) 
+        
         
         embed.add_field(
             name = "Cases:",
             value = f"""\nNew cases today: `{"{:,}".format(newcases)}`\n
-Compared to yesterday: `{('-' if casesdifference > 0 else '+')}{newnewcasesdiff}` `({"{:,}".format(yesterdaycases)})`\n
+Compared to yesterday: `{('-' if casesdifference > 0 else '+')}{yesterdaycasesdiff}` `({"{:,}".format(yesterdaycases)})`
+Compared to 7 days ago: `{('-' if weekcasesdifference > 0 else '+')}{weekcasesdiff}` `({"{:,}".format(weekagocases)})`\n
 Cumulative cases in the UK: `{'{:,}'.format(cumcases)}`\n""",
             inline = False
         )
         embed.add_field(
             name = "Deaths:",
             value = f"""\nNew deaths today: `{"{:,}".format(newdeaths)}`\n
-Compared to yesterday: `{("-" if deathsdifference > 0 else "+")}{newnewdeathsdiff}` `({"{:,}".format(yesterdaydeaths)})`\n
+Compared to yesterday: `{("-" if deathsdifference > 0 else "+")}{yesterdaydeathsdiff}` `({"{:,}".format(yesterdaydeaths)})`
+Compared to 7 days ago: `{('-' if weekdeathsdifference > 0 else '+')}{weekdeathsdiff}` `({"{:,}".format(weekagodeaths)})`\n
 Cumulative deaths in the UK: `{'{:,}'.format(cumdeaths)}`"""
         )
 
-
         embed.set_footer(text="Covid updates are back! Also, a new command is going to be released soon with more in depth details that a daily announcement cant quite do. Keep your eyes peeled!")
         embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/854449129476063255/859423644341895178/COVID-19-iCON-scaled-removebg-preview.png")
+        embed.set_image(url=f"attachment://{identifier}.png")
         if channelid is not None and channelid != "all":
             try:
                 channel = self.bot.get_channel(int(channelid))
@@ -121,21 +186,21 @@ Cumulative deaths in the UK: `{'{:,}'.format(cumdeaths)}`"""
                 embed.description = f"Here is your daily covid update, `{channel.name}`"
                 print(Fore.YELLOW + f"Coronavirus daily update sent to {channel.name}")
             if isinstance(channel, discord.TextChannel):
-                await channel.send(embed=embed) 
+                await channel.send(embed=embed, file=file) 
             return
 
         channels = (await db_select(f"""SELECT `channel_snowflake_id` FROM `covid_text_channels`"""))
         for channel in channels:
             channel = self.bot.get_channel(int(channel[0]))
             embed.description = f"Here is your daily covid update, in `{channel.name}`"
-            await channel.send(embed=embed)
-            print(Fore.YELLOW + f"Coronavirus daily update sent to {channel.guild.name} - {channel.name}")
+            #await channel.send(embed=embed,file=file)
+            #print(Fore.YELLOW + f"Coronavirus daily update sent to {channel.guild.name} - {channel.name}")
         users = (await db_select(f"""SELECT `user_snowflake_id` FROM `covid_users`"""))
         for user in users:
             user = self.bot.get_user(int(user[0]))
             embed.description = f"Hi, {user.name}! Here is your daily covid update!"
-            await user.send(embed=embed)
-            print(Fore.YELLOW + f"Coronavirus daily update sent to {user.name}")
+            #await user.send(embed=embed,file=file)
+            #print(Fore.YELLOW + f"Coronavirus daily update sent to {user.name}")
     
     @tasks.loop(seconds=10)
     async def covid_date_check(self):
@@ -201,6 +266,13 @@ Cumulative deaths in the UK: `{'{:,}'.format(cumdeaths)}`"""
             )
             await ctx.send(embed=embed)
 
+    @covid.command()
+    async def test(self, ctx):
+        if ctx.author.id == 546780798661951512:
+            await ctx.reply(embed=discord.Embed(title="Covid test results", description="Nope, not covid. Gay though.", color=0xff0000))
+        else:
+            await ctx.reply(embed=discord.Embed(title="Covid test results", description="You have tested positive" if random.randint(0,1000) <= 200 else "You have tested negative.", color=0x00ff00))
+
     @announcement.command()
     async def release(self, ctx, channel):
         await self.coronavirus_daily_update(channel)
@@ -220,7 +292,7 @@ Cumulative deaths in the UK: `{'{:,}'.format(cumdeaths)}`"""
                 def check(msg, author):
                     return msg.author == author
                 if channelid is None:
-                    await db_commit(f"""INSERT INTO `covid_text_channels`(`guild_name`,`guild_snowflake_id`,`update_channel_name`,`update_channel_snowflake_id`,`guild_owner_name`,`guild_owner_snowflake_id`,`date_subscribed`) VALUES (
+                    await db_commit(f"""INSERT INTO `covid_text_channels`(`guild_name`,`guild_snowflake_id`,`channel_name`,`channel_snowflake_id`,`guild_owner_name`,`guild_owner_snowflake_id`,`date_subscribed`) VALUES (
                         "{ctx.guild.name}",
                         "{ctx.guild.id}",
                         "{ctx.channel.name}",

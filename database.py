@@ -71,7 +71,7 @@ class databases():
                 `permission_level` INT DEFAULT 1 CHECK (permission_level <= 5 AND permission_level > 0),
                 `lockdown_exempt` TEXT,
                 `balance` DECIMAL(65,2),
-                `last_claim` DATE,
+                `last_claim` VARCHAR(10),
                 `claim_streak` INT DEFAULT 0,
                 `dm_prefix` TEXT DEFAULT "£"
                 );""")
@@ -268,19 +268,14 @@ class databases():
                 print(Fore.RED + f"DATABASE : CRITICAL ERROR -> covid logs table COULD NOT BE CREATED / LOADED! The Error is:\n{e}")
 
             try:
-                await cursor.execute(f"""CREATE TABLE IF NOT EXISTS covid_voice_channels(
+                await cursor.execute(f"""CREATE TABLE IF NOT EXISTS wordle(
                     `log_id` INT PRIMARY KEY AUTO_INCREMENT,
-                    `channel_name` TEXT,
-                    `channel_snowflake_id` VARCHAR(18) UNIQUE,
-                    `guild_owner_name` TEXT,
-                    `guild_owner_snowflake_id` VARCHAR(18),
-                    `guild_name` TEXT,
-                    `guild_snowflake_id` VARCHAR(18),
-                    `date_subscribed` DATETIME
-                    )""")
-                print(Fore.MAGENTA + "DATABASE : covid voice channels table has been created / loaded")
+                    `date` VARCHAR(10),
+                    `word` VARCHAR(5) UNIQUE
+                )""")
+                print(Fore.MAGENTA + "DATABASE : wordle table has been created / loaded")
             except Exception as e:
-                 print(Fore.RED + f"DATABASE : CRITICAL ERROR -> covid voice channels table COULD NOT BE CREATED / LOADED! The Error is:\n{e}")
+                print(Fore.RED + f"DATABASE : CRITICAL ERROR -> wordle table COULD NOT BE CREATED / LOADED! The Error is:\n{e}")                
 
 async def determine_prefix(bot, message):
     try:
@@ -434,136 +429,6 @@ async def get_current_covid_date():
     except Exception as e:
         print(Fore.RED + f"CRITICAL : FUNCTION 'get_current_covid_date' ERRORED WITH EXCEPTION {e}")
 
-async def multipage_list(bot, ctx, embed: discord.Embed, items: list, per_page = 10):
-    """Makes a multipage embed for a list of per_page amount of items
-    Bot for wait_for
-    ctx for sending
-    embed for a base of what to send - description and title will be overwritten. the list will be in the description so anything will be overwritten
-    items, list of items to show on the list
-    """
-    pages = []
-    temp_items = []
-    index = 0
-
-    # make lists of items
-    if not items:
-        embed.title = "There are no results to show."
-        await ctx.send(embed = embed)
-    else:
-        for item in items:
-            if len(temp_items) >= per_page:
-                pages.append(temp_items)
-                temp_items = []
-            temp_items.append(item)
-        pages.append(temp_items)
-
-        # make embed
-
-        description = "```\n"
-        for item in pages[index]:
-            description += f"{repr(item)[1:-1]}\n"
-        description += "```"
-        embed.description = description
-        embed.title = f"Showing {1 + (index * per_page)} to {(index * per_page) + (len(pages[index]))} of {len(items)} items\nPage {index + 1} of {len(pages)}"
-
-        # send embed
-
-        msg = await ctx.send(embed = embed)
-        if not len(pages) == 1:
-            reactions = ['\N{Leftwards Black Arrow}', '\N{Page Facing Up}', '\N{Black Rightwards Arrow}']
-            for emoji in reactions:
-                await msg.add_reaction(emoji)
-            def check(reaction, user):
-                if reaction.message.id == msg.id:
-                    if reaction.emoji in reactions:
-                        if user == ctx.author:
-                            return True
-            try:
-                while True:
-                    reaction, user = await bot.wait_for("reaction_add", check = check, timeout = 30)
-                    if reaction.emoji == '\N{Leftwards Black Arrow}':
-                        # left
-                        await reaction.remove(user)
-
-                        if index == 0:
-                            index = len(pages) - 1
-                        else:
-                            index += -1
-
-                        description = "```\n"
-                        for item in pages[index]:
-                            description += f"{repr(item)[1:-1]}\n"
-                        description += "```"
-                        embed.description = description
-                        embed.title = f"Showing {1 + (index * per_page)} to {(index * per_page) + (len(pages[index]))} of {len(items)} items\nPage {index + 1} of {len(pages)}"
-
-                        await msg.edit(embed = embed)
-                    elif reaction.emoji == '\N{Black Rightwards Arrow}':
-                        # right
-                        await reaction.remove(user)
-
-                        if index == len(pages) - 1:
-                            index = 0
-                        else:
-                            index += 1
-
-                        description = "```\n"
-                        for item in pages[index]:
-                            description += f"{repr(item)[1:-1]}\n"
-                        description += "```"
-                        embed.description = description
-                        embed.title = f"Showing {1 + (index * per_page)} to {(index * per_page) + (len(pages[index]))} of {len(items)} items\nPage {index + 1} of {len(pages)}"
-
-                        await msg.edit(embed = embed)
-                    elif reaction.emoji == '\N{Page Facing Up}':
-                        # choose page
-                        await reaction.remove(user)
-
-                        def mcheck(message):
-                            if message.author == ctx.author:
-                                return True
-
-                        x = await ctx.send(f"What page do you want to skip to? A number between 1 and {len(pages)}")
-
-                        message = await bot.wait_for("message", check = mcheck)
-
-                        try:
-                            new_page = int(message.content)
-                        except:
-                            try:
-                                await x.delete()
-                            except:
-                                pass
-                            await message.delete()
-                            await ctx.send("That wasn't a number", delete_after = 10)
-                        else:
-                            try:
-                                await message.delete()
-                                await x.delete()
-                            except:
-                                pass
-                            if new_page >= 1 and new_page <= len(pages):
-                                index = int(message.content) - 1
-
-                                description = "```\n"
-                                for item in pages[index]:
-                                    description += f"{repr(item)[1:-1]}\n"
-                                description += "```"
-                                embed.description = description
-                                embed.title = f"Showing {1 + (index * per_page)} to {(index * per_page) + (len(pages[index]))} of {len(items)} items\nPage {index + 1} of {len(pages)}"
-
-                                await msg.edit(embed = embed)
-                            else:
-                                x = await ctx.send(f"That wasn't between 1 and {len(pages)}", delete_after = 10)
-            except asyncio.TimeoutError:
-                try:
-                    await msg.clear_reactions()
-                except:
-                    pass
-#While this doesn't make use of the databases, it provides a very useful feature of splitting information into pages 
-
-
-
 emojis = {
     "greentick":"✅",
     "redtick":"❌",
@@ -573,6 +438,9 @@ emojis = {
     "clown":"🤡",
     "?":"❓",
     "idle":"🌙",
+    "greensquare":"🟩",
+    "yellowsquare":"🟨",
+    "blacksquare":"⬛",
     "0":"0️⃣",
     "1":"1️⃣",
     "2":"2️⃣",
@@ -617,9 +485,10 @@ emojis = {
     "trophy":"🏆",
     "mega":"📢",
     "clock":"🕐",
-    "alarmclock":"⏰"
-        }
-        
+    "alarmclock":"⏰",
+    "calendar":"📅",
+    "celebrate":"🥳"
+        }   
 #Dictionary of unicode emojis for easy access when imported into other files.
 
 alphabet = {1:'a', 2:'b', 3:'c', 4:'d', 5:'e', 6:'f', 7:'g', 8:'h', 9:'i', 10:'j', 11:'k', 12:'l', 13:'m', 14:'n', 15:'o', 16:'p', 17:'q', 18:'r', 19:'s', 20:'t', 21:'u', 22:'v', 23:'w', 24:'x', 25:'y', 26:'z'} 
@@ -630,6 +499,8 @@ availability_messages = {}
 
 playing = {}
 
+last_songs = {}
+
 permissions = {
     "1":"Basic",
     "2":"Trusted",
@@ -638,3 +509,43 @@ permissions = {
     "5":"Owner"
 }
 #Dictionary of permission level and names for easy access when imported into other files.
+
+work_schedule = {
+"22/11/2021":"11:30-20:00",
+"23/11/2021":"11:30-20:00",
+"24/11/2021":"Off",
+"25/11/2021":"09:00-16:00 (Football 18:00-19:00)",
+"26/11/2021":"11:30-20:00",
+"27/11/2021":"Off",
+"28/11/2021":"Off",
+"29/11/2021":"11:30-20:00",
+"30/11/2021":"10:00-18:30",
+"01/12/2021":"09:00-17:00",
+"02/12/2021":"Off (Football 18:00-19:00)",
+"03/12/2021":"11:30-20:00",
+"04/12/2021":"11:30-20:00",
+"05/12/2021":"15:00-19:00",
+"06/12/2021":"12:00-20:00",
+"07/12/2021":"12:00-20:00",
+"08/12/2021":"Off",
+"09/12/2021":"09:00-16:00 (Football 18:00-19:00)",
+"10/12/2021":"13:00-21:00",
+"11/12/2021":"Off",
+"12/12/2021":"Off",
+"13/12/2021":"12:00-20:00",
+"14/12/2021":"Off",
+"15/12/2021":"13:00-21:00",
+"16/12/2021":"13:00-21:00 (Football 18:00-19:00)",
+"17/12/2021":"Off",
+"18/12/2021":"12:00-20:00",
+"19/12/2021":"12:30-19:00",
+"20/12/2021":"14:00-22:00",
+"21/12/2021":"Off",
+"22/12/2021":"Off",
+"23/12/2021":"09:00-16:30 (Football 18:00-19:00)",
+"24/12/2021":"11:00-18:00"
+}
+
+currwordle = ""
+
+completed_wordle = []

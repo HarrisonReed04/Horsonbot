@@ -2,6 +2,8 @@
 #This ensures the system knows to use python 
 #This is preference, when the bot restarts it starts to print on a new line
 import warnings
+
+from discord.flags import Intents
 warnings.filterwarnings('ignore', module=r"aiomysql")
 import discord
 from discord.ext import commands
@@ -399,7 +401,10 @@ async def help(ctx, *cog):
 
         # For when only the command is invoked
         # Lists all cogs and uncategorized commands
-        prefix = " / ".join((await db_select(f"""SELECT `guild_prefix` FROM `guilds` WHERE `guild_snowflake_id` = "{ctx.guild.id}";"""))[0][0].split("-"))
+        if ctx.guild:
+            prefix = " / ".join((await db_select(f"""SELECT `guild_prefix` FROM `guilds` WHERE `guild_snowflake_id` = "{ctx.guild.id}";"""))[0][0].split("-"))
+        else:
+            prefix = " / ".join((await db_select(f"""SELECT `dm_prefix` FROM `users` WHERE `user_snowflake_id` = "{ctx.author.id}";"""))[0][0].split("-"))
         halp=discord.Embed(
             description = f'My prefix here is `{prefix}`\nUse `{prefix}help **cog**` for the commands\nIf you know the command name use `{prefix}help **command**`\nThe cog name must be exactly what is listed below',
             colour = 0xff0000)

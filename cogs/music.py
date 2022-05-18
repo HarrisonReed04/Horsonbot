@@ -1,4 +1,6 @@
 import asyncio
+
+import attr
 from database import emojis, playing
 import discord
 from discord.ext import commands, tasks
@@ -78,9 +80,18 @@ class music(commands.Cog):
             embed=discord.Embed(title="Select the file", description=f'If your desired search doesn\'t appear, use £play `full video URL`', color=0x00ffff)
             video_ids = re.findall(r"watch\?v=(\S{11})", html.read().decode())
             titles = [await self.get_title(x) for x in video_ids]
+            tx = 0
             for count,title in enumerate(titles[:5]):
+                newline = "\n"
                 yt = YouTube(f"https://www.youtube.com/watch?v=" + video_ids[count])
-                embed.add_field(name=f"{emojis[f'{count+1}']} > {title}", value=f"Duration: `{str(datetime2.timedelta(seconds=yt.length))}`\nRating: `{round(yt.rating, 2)} {'⭐' * (int(round(yt.rating)))}`", inline=False)
+                print(yt.views)
+                if tx == 0:
+                    for attributes in dir(yt):
+                        print(attributes)
+                        
+                    tx+=1
+                views = "{:,}".format(yt.views)
+                embed.add_field(name=f"{emojis[f'{count+1}']} > {title}", value=f"""Duration: `{str(datetime2.timedelta(seconds=yt.length))}`\n{f'Rating: `{round(yt.rating, 2)} {"⭐" * (int(round(yt.rating)))}`' if yt.rating else f'View count: `{views}`'}""", inline=False)
             await msg.edit(embed=embed)
             for x in ['1','2','3','4','5']:
                 await msg.add_reaction(emojis[x])
@@ -119,11 +130,12 @@ class music(commands.Cog):
                 await msg.clear_reactions()
             except: pass
             yt = YouTube(search)
+            print(yt)
             try:
                 try:
                     filename = yt.streams.filter(only_audio=True).first().download(output_path="cogs/youtube",filename=f"{yt.title}_{random.randint(0,100000)}.mp3")
-                except:
-                    print("broken")
+                except Exception as e:
+                    print(e)
                 vc = await ctx.author.voice.channel.connect()
                 file = FFmpegPCMAudio(filename)
                 vc.play(file)
